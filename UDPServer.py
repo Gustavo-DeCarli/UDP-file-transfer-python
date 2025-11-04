@@ -1,52 +1,59 @@
 from socket import *
-import time
 import os
 
-# Configurações do servidor
 serverPort = 12000
-bufferSize = 65535  # tamanho máximo do pacote UDP
 serverSocket = socket(AF_INET, SOCK_DGRAM)
 serverSocket.bind(("", serverPort))
 
-print(f"Servidor UDP iniciado na porta {serverPort}")
-print("Aguardando arquivo do cliente...")
+# Obtém o IP local da máquina
+hostname = gethostname()
+local_ip = gethostbyname(hostname)
+
+print("Servidor pronto para receber arquivos...")
+print(f"Endereço de recepção: {local_ip}:{serverPort}\n")
+
+arquivo = None
+arquivo_nome = ""
+pacotes_recebidos = 0
+num_pacotes_esperados = 0
 
 while True:
-    # Recebe nome do arquivo
-    file_info, clientAddress = serverSocket.recvfrom(bufferSize)
-    filename = file_info.decode()
-    print(f"Recebendo arquivo: {filename}")
-    serverSocket.sendto("OK".encode(), clientAddress)
+    message, clientAddress = serverSocket.recvfrom(4096)
 
-    # Recebe tamanho total do arquivo
-    file_size_data, _ = serverSocket.recvfrom(bufferSize)
-    total_size = int(file_size_data.decode())
-    print(f"Tamanho total: {total_size} bytes")
-    serverSocket.sendto("OK".encode(), clientAddress)
+    # Início da transferência
+    if message.startswith(b"START|"):
+        partes = message.decode().split("|")
+        arquivo_nome = partes[1]
+        tamanho_total = int(partes[2])
+        num_pacotes_esperados = int(partes[3])
 
-    # Cria arquivo para escrita
-    with open("recebido_" + os.path.basename(filename), "wb") as f:
-        received_bytes = 0
-        packet_count = 0
-        start_time = time.time()
+        nome_destino = "recebido_" + arquivo_nome
+        arquivo = open(nome_destino, "wb")
 
-        while received_bytes < total_size:
-            data, _ = serverSocket.recvfrom(bufferSize)
-            if data == b"EOF":
-                break
-            f.write(data)
-            received_bytes += len(data)
-            packet_count += 1
+        pacotes_recebidos = 0
+        print(f"Iniciando recebimento do arquivo '{arquivo_nome}' ({tamanho_total} bytes)")
+        serverSocket.sendto(b"OK", clientAddress)
+        continue
 
-        end_time = time.time()
+    # Fim da transferência
+    if message == b"END":
+        if arquivo:
+            arquivo.close()
+            print(f"\nTransferência concluída! Arquivo salvo como 'recebido_{arquivo_nome}'")
+            print(f"Pacotes recebidos: {pacotes_recebidos}/{num_pacotes_esperados}\n")
+            arquivo = None
+        continue
 
-    print("\n📦 Transferência concluída!")
-    print(f"Arquivo salvo como: recebido_{filename}")
-    print(f"Tamanho recebido: {received_bytes} bytes")
-    print(f"Número de pacotes: {packet_count}")
-    print(f"Duração: {end_time - start_time:.2f} segundos")
-    if end_time - start_time > 0:
-        print(f"Taxa média: {received_bytes / (end_time - start_time):.2f} bytes/s\n")
+    # Recebimento de pacotes de dados
+    try:
+        cabecalho, chunk = message.split(b"|", 1)
+        num_pacote = int(cabecalho.decode())
+        pacotes_recebidos += 1
 
-    # Aguarda próximo arquivo
-    print("Aguardando próximo arquivo...\n")
+        arquivo.write(chunk)
+        print(f"Pacote {num_pacote} recebido ({len(chunk)} bytes)")
+        ack_msg = f"ACK {num_pacote}".encode()
+        serverSocket.sendto(ack_msg, clientAddress)
+    except Exception as e:
+        print("Erro ao processar pacote:", e)
+        continue
