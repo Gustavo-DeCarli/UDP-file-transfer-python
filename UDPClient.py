@@ -3,7 +3,7 @@ import os
 import time
 
 # Config
-serverName = "172.25.16.1" 
+serverName = input("Digite o número do IP do server: ")
 serverPort = 12000
 clientSocket = socket(AF_INET, SOCK_DGRAM)
 
