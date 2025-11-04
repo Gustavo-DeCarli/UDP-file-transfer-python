@@ -2,73 +2,63 @@ from socket import *
 import os
 import time
 
-serverName = input("Digite o endereço IP do servidor (ex: 127.0.0.1): ")
-serverPort = 12001
+# Config
+serverName = "172.25.16.1" 
+serverPort = 12000
 clientSocket = socket(AF_INET, SOCK_DGRAM)
-clientSocket.settimeout(5)  # timeout para evitar travamentos
 
-filename = input("Digite o nome do arquivo a ser enviado: ")
+arquivo_path = input("Digite o caminho do arquivo a enviar: ").strip()
+tam_pacote = int(input("Digite o tamanho de cada pacote (em bytes): "))
 
-if not os.path.exists(filename):
-    print("Arquivo não encontrado!")
+if not os.path.exists(arquivo_path):
+    print("Arquivo não encontrado.")
     clientSocket.close()
     exit()
 
-packet_size = int(input("Digite o tamanho do pacote (em bytes): "))
+# Lê o arquivo em binário
+with open(arquivo_path, "rb") as f:
+    dados = f.read()
 
-# --- Envio das informações iniciais ---
-try:
-    # Envia nome do arquivo
-    clientSocket.sendto(filename.encode(), (serverName, serverPort))
-    msg, _ = clientSocket.recvfrom(1024)
-    if msg.decode() != "OK":
-        print("Erro ao iniciar comunicação com o servidor.")
-        clientSocket.close()
-        exit()
+tamanho_total = len(dados)
+num_pacotes = (tamanho_total + tam_pacote - 1) // tam_pacote
 
-    # Envia tamanho total do arquivo
-    file_size = os.path.getsize(filename)
-    clientSocket.sendto(str(file_size).encode(), (serverName, serverPort))
-    msg, _ = clientSocket.recvfrom(1024)
-    if msg.decode() != "OK":
-        print("Erro ao enviar tamanho do arquivo.")
-        clientSocket.close()
-        exit()
+print(f"\nEnviando arquivo: {os.path.basename(arquivo_path)}")
+print(f"Tamanho total: {tamanho_total} bytes")
+print(f"Pacotes: {num_pacotes} de {tam_pacote} bytes cada\n")
 
-    print(f"Iniciando envio de '{filename}' ({file_size} bytes)...")
+inicio = time.time()
 
-    # --- Envio do arquivo ---
-    start_time = time.time()
-    with open(filename, "rb") as f:
-        bytes_sent = 0
-        packet_count = 0
+# Envia metadados 1º
+info = f"START|{os.path.basename(arquivo_path)}|{tamanho_total}|{num_pacotes}"
+clientSocket.sendto(info.encode(), (serverName, serverPort))
+ack, _ = clientSocket.recvfrom(1024)
+print("Servidor pronto:", ack.decode())
 
-        while True:
-            data = f.read(packet_size)
-            if not data:
-                break
-            clientSocket.sendto(data, (serverName, serverPort))
-            bytes_sent += len(data)
-            packet_count += 1
+for i in range(num_pacotes):
+    inicio_byte = i * tam_pacote
+    fim_byte = inicio_byte + tam_pacote
+    chunk = dados[inicio_byte:fim_byte]
 
-            # Mostra progresso simples
-            if packet_count % 100 == 0 or bytes_sent == file_size:
-                print(f"Enviado: {bytes_sent}/{file_size} bytes ({(bytes_sent/file_size)*100:.1f}%)")
+    pacote = f"{i+1:05d}|".encode() + chunk
+    clientSocket.sendto(pacote, (serverName, serverPort))
+    print(f"Pacote {i+1}/{num_pacotes} enviado ({len(chunk)} bytes)")
 
-    # Envia sinal de fim de arquivo
-    clientSocket.sendto(b"EOF", (serverName, serverPort))
-    end_time = time.time()
+    ack, _ = clientSocket.recvfrom(1024)
+    print("ACK:", ack.decode())
 
-    print("\n✅ Envio concluído!")
-    print(f"Tamanho enviado: {bytes_sent} bytes")
-    print(f"Número de pacotes: {packet_count}")
-    print(f"Duração: {end_time - start_time:.2f} segundos")
-    if end_time - start_time > 0:
-        print(f"Taxa média: {bytes_sent / (end_time - start_time):.2f} bytes/s")
+# Envia sinal de término
+clientSocket.sendto(b"END", (serverName, serverPort))
+print("\nArquivo enviado com sucesso!")
 
-except timeout:
-    print("⏰ O servidor não respondeu. Verifique se ele está em execução e acessível.")
-except Exception as e:
-    print("Erro durante o envio:", e)
+fim = time.time()
+tempo_total = fim - inicio
+
+print("\n=== Estatísticas ===")
+print(f"Arquivo: {os.path.basename(arquivo_path)}")
+print(f"Pacotes enviados: {num_pacotes}")
+print(f"Tamanho de cada pacote: {tam_pacote} bytes")
+print(f"Tamanho total: {tamanho_total} bytes")
+print(f"Tempo total: {tempo_total:.2f} s")
+print(f"Taxa média: {tamanho_total/tempo_total/1024:.2f} KB/s")
 
 clientSocket.close()
