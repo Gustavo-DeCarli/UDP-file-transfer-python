@@ -6,11 +6,11 @@ serverSocket = socket(AF_INET, SOCK_DGRAM)
 serverSocket.bind(("", serverPort))
 
 # Obtém o IP local da máquina
-hostname = gethostname()
-local_ip = gethostbyname(hostname)
+# hostname = gethostname()
+# local_ip = gethostbyname(hostname)
 
 print("Servidor pronto para receber arquivos...")
-print(f"Endereço de recepção: {local_ip}:{serverPort}\n")
+print(f"Endereço de recepção: 192.168.100.119:{serverPort}\n")
 
 arquivo = None
 arquivo_nome = ""
@@ -27,7 +27,7 @@ while True:
         tamanho_total = int(partes[2])
         num_pacotes_esperados = int(partes[3])
 
-        nome_destino = "recebido_" + arquivo_nome
+        nome_destino = arquivo_nome
         arquivo = open(nome_destino, "wb")
 
         pacotes_recebidos = 0
@@ -39,7 +39,7 @@ while True:
     if message == b"END":
         if arquivo:
             arquivo.close()
-            print(f"\nTransferência concluída! Arquivo salvo como 'recebido_{arquivo_nome}'")
+            print(f"\nTransferência concluída! Arquivo salvo como '{arquivo_nome}'")
             print(f"Pacotes recebidos: {pacotes_recebidos}/{num_pacotes_esperados}\n")
             arquivo = None
         continue
