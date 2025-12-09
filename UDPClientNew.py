@@ -6,6 +6,7 @@ import time
 serverName = input("Digite o número do IP do server: ")
 serverPort = 12000
 clientSocket = socket(AF_INET, SOCK_DGRAM)
+total_envios = 0
 
 arquivo_path = input("Digite o caminho do arquivo a enviar: ").strip()
 tam_pacote = int(input("Digite o tamanho de cada pacote (em bytes): "))
@@ -34,6 +35,8 @@ clientSocket.sendto(info.encode(), (serverName, serverPort))
 ack, _ = clientSocket.recvfrom(1024)
 print("Servidor pronto:", ack.decode())
 
+clientSocket.settimeout(0.1)
+
 # Enviar pacotes
 for i in range(num_pacotes):
     inicio_byte = i * tam_pacote
@@ -44,9 +47,8 @@ for i in range(num_pacotes):
 
     while True:
         clientSocket.sendto(pacote, (serverName, serverPort))
+        total_envios += 1
         print(f"Pacote {i+1}/{num_pacotes} enviado ({len(chunk)} bytes)")
-
-        clientSocket.settimeout(1.5)
         try:
             ack, _ = clientSocket.recvfrom(1024)
             ack = ack.decode()
@@ -70,7 +72,9 @@ tempo_total = fim - inicio
 
 print("\n=== Estatísticas ===")
 print(f"Arquivo: {os.path.basename(arquivo_path)}")
-print(f"Pacotes enviados: {num_pacotes}")
+print(f"Pacotes únicos (sem contar retransmissões): {num_pacotes}")
+print(f"Total de envios (incluindo retransmissões): {total_envios}")
+print(f"Retransmissões: {total_envios - num_pacotes}")
 print(f"Tamanho de cada pacote: {tam_pacote} bytes")
 print(f"Tamanho total: {tamanho_total} bytes")
 print(f"Tempo total: {tempo_total:.2f} s")

@@ -7,7 +7,7 @@ serverSocket = socket(AF_INET, SOCK_DGRAM)
 serverSocket.bind(("", serverPort))
 
 print("Servidor pronto para receber arquivos...")
-print(f"Endereço de recepção: 0.0.0.0:{serverPort}\n")
+print(f"Endereço de recepção: 192.168.0.15:{serverPort}\n")
 
 # Probabilidades de perda e erro
 prob_perda = 0.15   # 15% dos pacotes são ignorados
@@ -17,6 +17,8 @@ arquivo = None
 arquivo_nome = ""
 pacotes_recebidos = 0
 num_pacotes_esperados = 0
+pacotes_perdidos = 0
+pacotes_corrompidos = 0
 
 while True:
     message, clientAddress = serverSocket.recvfrom(4096)
@@ -30,6 +32,8 @@ while True:
 
         arquivo = open(arquivo_nome, "wb")
         pacotes_recebidos = 0
+        pacotes_perdidos = 0
+        pacotes_corrompidos = 0
 
         print(f"\nIniciando recebimento do arquivo '{arquivo_nome}' ({tamanho_total} bytes)")
         serverSocket.sendto(b"OK", clientAddress)
@@ -40,7 +44,10 @@ while True:
         if arquivo:
             arquivo.close()
             print(f"\nTransferência concluída! Arquivo salvo como '{arquivo_nome}'")
-            print(f"Pacotes recebidos: {pacotes_recebidos}/{num_pacotes_esperados}\n")
+            print("=== Estatísticas do servidor ===")
+            print(f"Pacotes recebidos corretamente: {pacotes_recebidos}/{num_pacotes_esperados}")
+            print(f"Pacotes perdidos (simulados): {pacotes_perdidos}")
+            print(f"Pacotes corrompidos (simulados): {pacotes_corrompidos}\n")
             arquivo = None
         continue
 
@@ -51,11 +58,13 @@ while True:
 
         # --- SIMULA PERDA ---
         if random.random() < prob_perda:
+            pacotes_perdidos += 1
             print(f"[PERDIDO] Pacote {num_pacote} descartado pelo servidor.")
             continue  # não envia ACK
 
         # --- SIMULA ERRO ---
         if random.random() < prob_erro:
+            pacotes_corrompidos += 1
             print(f"[ERRO] Pacote {num_pacote} corrompido. Enviando NACK...")
             serverSocket.sendto(f"NACK {num_pacote}".encode(), clientAddress)
             continue
